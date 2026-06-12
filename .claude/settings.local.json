@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Head *)",
+      "PowerShell(Get-ChildItem \"G:\\\\Otros ordenadores\\\\Mi PC\\\\Documents\\\\Acceso a CLAUDE\\\\OTROS\\\\MiQuiniela\\\\node_modules\" | Select-Object Name | Where-Object { $_.Name -match \"vite|firebase|tailwind|autoprefixer\" })",
+      "PowerShell(Get-ChildItem \"G:\\\\Otros ordenadores\\\\Mi PC\\\\Documents\\\\Acceso a CLAUDE\\\\OTROS\\\\MiQuiniela\\\\node_modules\" -Force | Where-Object { $_.Name -eq '.bin' })",
+      "PowerShell(\\(Get-Content \"G:\\\\Otros ordenadores\\\\Mi PC\\\\Documents\\\\Acceso a CLAUDE\\\\OTROS\\\\MiQuiniela\\\\node_modules\\\\vite\\\\package.json\"\\).Length)",
+      "PowerShell(Test-Path *)",
+      "PowerShell(Get-ChildItem \"G:\\\\Otros ordenadores\\\\Mi PC\\\\Documents\\\\Acceso a CLAUDE\\\\OTROS\\\\MiQuiniela\\\\node_modules\\\\.bin\" -ErrorAction SilentlyContinue | Select-Object -First 5 Name; if \\(-not \\(Test-Path \"G:\\\\Otros ordenadores\\\\Mi PC\\\\Documents\\\\Acceso a CLAUDE\\\\OTROS\\\\MiQuiniela\\\\node_modules\\\\.bin\"\\)\\) { Write-Host \"Aún instalando...\" })",
+      "PowerShell($vite = \"G:\\\\Otros ordenadores\\\\Mi PC\\\\Documents\\\\Acceso a CLAUDE\\\\OTROS\\\\MiQuiniela\\\\node_modules\\\\vite\\\\package.json\"; $len = \\(Get-Item $vite -ErrorAction SilentlyContinue\\).Length; \"vite/package.json size: $len bytes\"; $bin = Test-Path \"G:\\\\Otros ordenadores\\\\Mi PC\\\\Documents\\\\Acceso a CLAUDE\\\\OTROS\\\\MiQuiniela\\\\node_modules\\\\.bin\"; \".bin exists: $bin\")",
+      "PowerShell(Get-Content *)",
+      "PowerShell(pnpm *)",
+      "PowerShell(Get-ChildItem *)"
+    ]
+  }
+}

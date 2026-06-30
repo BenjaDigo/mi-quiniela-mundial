@@ -1,13 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 import { useQuiniela } from '../context/QuinielaContext'
 import { getParticipants, getActiveQuinielaId } from '../services/firestoreService'
-import { TEAM_MAP } from '../data/teams'
+import { getAliveTeams } from '../utils/teamAssignment'
 import TeamCard from '../components/UI/TeamCard'
 import PoolTeams from '../components/UI/PoolTeams'
 import PrizePoolBanner from '../components/UI/PrizePoolBanner'
 import LoadingSpinner from '../components/UI/LoadingSpinner'
+
 export default function MyTeams() {
   const { user } = useAuth()
   const { matches } = useQuiniela()
@@ -26,6 +27,37 @@ export default function MyTeams() {
     load()
   }, [user])
 
+  // Equipos que siguen vivos en el torneo
+  const aliveSet = useMemo(() => new Set(getAliveTeams(matches)), [matches])
+
+  // Próximo partido (o en curso) por equipo
+  const nextMatchMap = useMemo(() => {
+    const map = {}
+    ;(myTeams ?? []).forEach(code => {
+      const upcoming = matches
+        .filter(m =>
+          (m.homeTeam?.tla === code || m.awayTeam?.tla === code) &&
+          (m.status === 'SCHEDULED' || m.status === 'TIMED' ||
+           m.status === 'IN_PLAY'   || m.status === 'PAUSED')
+        )
+        .sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate))
+      map[code] = upcoming[0] ?? null
+    })
+    return map
+  }, [myTeams, matches])
+
+  // Vivos primero, eliminados al final
+  const sortedTeams = useMemo(() => {
+    if (!myTeams) return []
+    return [...myTeams].sort((a, b) => {
+      const aElim = aliveSet.has(a) ? 0 : 1
+      const bElim = aliveSet.has(b) ? 0 : 1
+      return aElim - bElim
+    })
+  }, [myTeams, aliveSet])
+
+  const eliminated = sortedTeams.filter(c => !aliveSet.has(c))
+
   if (loading) return <LoadingSpinner text="Cargando tus selecciones..." />
 
   if (!myTeams?.length) {
@@ -43,7 +75,10 @@ export default function MyTeams() {
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
         <h1 className="text-3xl font-black text-white">Mis selecciones</h1>
-        <p className="text-zinc-500 mt-1 text-sm">{myTeams.length} selecciones asignadas</p>
+        <p className="text-zinc-500 mt-1 text-sm">
+          {myTeams.length} selecciones
+          {eliminated.length > 0 && ` · ${eliminated.length} eliminada${eliminated.length > 1 ? 's' : ''}`}
+        </p>
       </motion.div>
 
       {/* Premio y pool */}
@@ -52,12 +87,16 @@ export default function MyTeams() {
 
       {/* Teams grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-        {myTeams.map((code, i) => (
+        {sortedTeams.map((code, i) => (
           <motion.div key={code}
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: i * 0.04 }}>
-            <TeamCard code={code} />
+            <TeamCard
+              code={code}
+              isAlive={aliveSet.has(code)}
+              nextMatch={nextMatchMap[code]}
+            />
           </motion.div>
         ))}
       </div>

@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ChevronLeft, ChevronRight, RefreshCw, List, GitBranch, Users } from 'lucide-react'
 import { useQuiniela } from '../context/QuinielaContext'
@@ -55,7 +56,11 @@ function OwnerGrid({ matches, teamOwnerMap, currentUid, emptyText }) {
 export default function Matches() {
   const { matches, syncing, lastSync, syncScores, activeQuinielaId } = useQuiniela()
   const { user } = useAuth()
-  const [selectedDay, setSelectedDay] = useState(new Date())
+  const [searchParams] = useSearchParams()
+  const [selectedDay, setSelectedDay] = useState(() => {
+    const d = searchParams.get('day')
+    return d ? new Date(`${d}T12:00:00`) : new Date()
+  })
   const [myTeams, setMyTeams]         = useState([])
   const [participants, setParticipants] = useState([])
   const [view, setView]               = useState('list')

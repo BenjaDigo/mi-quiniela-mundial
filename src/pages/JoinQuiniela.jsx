@@ -19,6 +19,10 @@ export default function JoinQuiniela() {
     try {
       const q = await getQuiniela(code.trim().toUpperCase())
       if (!q) { toast.error('Código no válido'); return }
+      if (q.tarifaMode === 'por_equipo' && !q.extraTeams?.length) {
+        toast.error('No hay equipos disponibles en esta quiniela')
+        return
+      }
       await joinQuiniela(q.id, user)
       toast.success(`¡Te uniste a "${q.name}"! 🎉`)
       navigate('/dashboard')

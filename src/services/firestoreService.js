@@ -40,13 +40,37 @@ export async function updateQuiniela(id, data) {
   await updateDoc(doc(db, 'quinielas', id), data)
 }
 
+export async function deleteQuiniela(quinielaId) {
+  const participantsSnap = await getDocs(collection(db, 'quinielas', quinielaId, 'participants'))
+  const batch = writeBatch(db)
+  participantsSnap.docs.forEach(d => batch.delete(d.ref))
+  batch.delete(doc(db, 'quinielas', quinielaId))
+  await batch.commit()
+}
+
 // ── Participantes ──────────────────────────────────────────────────────────
 
 export async function joinQuiniela(quinielaId, user) {
-  await setDoc(
+  const batch = writeBatch(db)
+  batch.set(
     doc(db, 'quinielas', quinielaId, 'participants', user.uid),
     { uid: user.uid, displayName: user.displayName, email: user.email, teams: [], points: 0, joinedAt: serverTimestamp() }
   )
+  batch.set(doc(db, 'users', user.uid), { activeQuinielaId: quinielaId }, { merge: true })
+  await batch.commit()
+}
+
+export async function getActiveQuinielaId(uid) {
+  const profile = await getUserProfile(uid)
+  if (profile?.activeQuinielaId) return profile.activeQuinielaId
+  const qs = await getMyQuinielas(uid)
+  return qs[0]?.id ?? null
+}
+
+export function listenActiveQuinielaId(uid, cb) {
+  return onSnapshot(doc(db, 'users', uid), snap => {
+    cb(snap.exists() ? (snap.data()?.activeQuinielaId ?? null) : null)
+  })
 }
 
 export async function getParticipants(quinielaId) {

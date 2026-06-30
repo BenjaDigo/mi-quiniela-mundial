@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 import { useQuiniela } from '../context/QuinielaContext'
-import { getParticipants, getAllQuinielas } from '../services/firestoreService'
+import { getParticipants, getActiveQuinielaId } from '../services/firestoreService'
 import { TEAM_MAP } from '../data/teams'
 import TeamCard from '../components/UI/TeamCard'
+import PoolTeams from '../components/UI/PoolTeams'
+import PrizePoolBanner from '../components/UI/PrizePoolBanner'
 import LoadingSpinner from '../components/UI/LoadingSpinner'
 import { calcTeamPoints } from '../utils/scoring'
 
@@ -17,9 +19,8 @@ export default function MyTeams() {
 
   useEffect(() => {
     async function load() {
-      const quinielas = await getAllQuinielas()
-      if (!quinielas.length) { setLoading(false); return }
-      const qId = quinielas[0].id
+      const qId = await getActiveQuinielaId(user.uid)
+      if (!qId) { setMyTeams([]); setLoading(false); return }
       const participants = await getParticipants(qId)
       const me = participants.find(p => p.uid === user?.uid)
       if (me) {
@@ -64,6 +65,10 @@ export default function MyTeams() {
           <p className="text-4xl font-black gold-text">{totalPts}</p>
         </div>
       </motion.div>
+
+      {/* Premio y pool */}
+      <PrizePoolBanner className="mb-4" />
+      <PoolTeams className="mb-8" />
 
       {/* Teams grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">

@@ -5,6 +5,7 @@ import { useQuiniela } from '../context/QuinielaContext'
 import { useAuth } from '../context/AuthContext'
 import MatchCard from '../components/UI/MatchCard'
 import BracketView from '../components/UI/BracketView'
+import PoolTeams from '../components/UI/PoolTeams'
 import { getUserTeams } from '../services/firestoreService'
 import { format, isSameDay, isToday, isYesterday, isTomorrow } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -109,6 +110,9 @@ export default function Matches() {
         </section>
       ) : (
         <>
+          {/* Pool disponible */}
+          <PoolTeams />
+
           {/* Mis equipos */}
           <section>
             <h2 className="section-title mb-1">Mis Equipos</h2>

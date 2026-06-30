@@ -43,7 +43,9 @@ export function calcTeamPoints(team, matches, stage, scoring = DEFAULT_SCORING) 
   }
 
   const stageBonus = {
-    ROUND_OF_32:      scoring.r32,
+    LAST_32:          scoring.r32,
+    LAST_16:          scoring.r16,
+    ROUND_OF_32:      scoring.r32,  // alias por si está cacheado con nombre anterior
     ROUND_OF_16:      scoring.r16,
     QUARTER_FINALS:   scoring.qf,
     SEMI_FINALS:      scoring.sf,

@@ -1,16 +1,16 @@
 import { useEffect, useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { Plus, RefreshCw, Users, Settings, Copy, Check, DollarSign, Save, Trophy, UserPlus, X } from 'lucide-react'
+import { Plus, RefreshCw, Users, Settings, Copy, Check, DollarSign, Save, Trophy, UserPlus, X, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext'
 import { useQuiniela } from '../context/QuinielaContext'
 import {
-  createQuiniela, getMyQuinielas, updateQuiniela,
+  createQuiniela, getMyQuinielas, updateQuiniela, deleteQuiniela,
   getParticipants, assignTeamsToParticipants,
   updateParticipantPoints, listenParticipants,
-  markParticipantPaid, assignExtraTeam, setShareBuddy,
+  markParticipantPaid, assignExtraTeam, setShareBuddy, saveUserProfile,
 } from '../services/firestoreService'
-import { assignTeams } from '../utils/teamAssignment'
+import { assignTeams, getAliveTeams } from '../utils/teamAssignment'
 import { calcParticipantPoints, DEFAULT_SCORING } from '../utils/scoring'
 import { TEAM_MAP, TEAMS } from '../data/teams'
 import Modal from '../components/UI/Modal'
@@ -37,11 +37,22 @@ export default function Admin() {
 
   // tarifa
   const [tarifaInput, setTarifaInput]   = useState('')
+  const [tarifaMode, setTarifaMode]     = useState('fija') // 'fija' | 'por_equipo'
   const [savingTarifa, setSavingTarifa] = useState(false)
 
   // acciones por participante
   const [togglingPaid, setTogglingPaid]     = useState(null)
   const [assigningExtra, setAssigningExtra] = useState(null)
+
+  // distribución: solo vivos
+  const [onlyAlive, setOnlyAlive] = useState(false)
+
+  // estado quiniela
+  const [togglingStatus, setTogglingStatus] = useState(false)
+
+  // borrar quiniela
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleting, setDeleting]                   = useState(false)
 
   // compartir apuesta
   const [shareModal, setShareModal]   = useState(null) // { uid } | null
@@ -69,37 +80,50 @@ export default function Admin() {
 
   useEffect(() => {
     if (!active?.id) return
+    setTarifaMode(active.tarifaMode ?? 'fija')
     return listenParticipants(active.id, setParticipants)
   }, [active?.id])
 
   // ── distribución ──────────────────────────────────────────────────
+  const aliveTeams = useMemo(() => getAliveTeams(matches), [matches])
+
   const distribution = useMemo(() => {
     const n = participants.length
     if (!n) return null
-    const perPerson = Math.floor(TEAMS.length / n)
-    const extra     = TEAMS.length % n
-    return { perPerson, extra, total: TEAMS.length }
-  }, [participants.length])
+    const pool      = onlyAlive ? aliveTeams : TEAMS
+    const perPerson = tarifaMode === 'por_equipo' ? 1 : Math.floor(pool.length / n)
+    const extra     = pool.length - perPerson * n
+    return { perPerson, extra, total: pool.length }
+  }, [participants.length, onlyAlive, aliveTeams, tarifaMode])
 
   const extraTeams = active?.extraTeams ?? []
 
   const prizePool = useMemo(() => {
     if (!active?.tarifa) return null
-    const paidCount   = participants.filter(p => p.paid).length
+    if ((active.tarifaMode ?? 'fija') === 'por_equipo') {
+      const totalTeams = participants.reduce((s, p) => s + (p.teams?.length ?? 0), 0)
+      return totalTeams * active.tarifa
+    }
     const totalExtras = participants.reduce((s, p) => s + (p.extrasBought ?? 0), 0)
-    return (paidCount + totalExtras) * active.tarifa
-  }, [participants, active?.tarifa])
+    return (participants.length + totalExtras) * active.tarifa
+  }, [participants, active?.tarifa, active?.tarifaMode])
 
   // ── handlers ──────────────────────────────────────────────────────
   async function handleCreate() {
     if (!newName.trim()) return
     setCreating(true)
     const id = nanoid()
-    await createQuiniela(id, { name: newName.trim(), adminUid: user.uid, inviteCode: id, tarifa: null, extraTeams: [] })
+    const data = { name: newName.trim(), adminUid: user.uid, inviteCode: id, tarifa: null, extraTeams: [] }
+    await createQuiniela(id, data)
+    await saveUserProfile(user.uid, { activeQuinielaId: id })
+    const created = { id, ...data, status: 'draft' }
+    setQuinielas(prev => [created, ...prev])
+    setActive(created)
+    setTarifaInput('')
+    setParticipants([])
     toast.success(`Quiniela "${newName}" creada ✅`)
     setShowCreate(false)
     setNewName('')
-    load()
     setCreating(false)
   }
 
@@ -107,23 +131,50 @@ export default function Admin() {
     const val = parseFloat(tarifaInput)
     if (isNaN(val) || val < 0) { toast.error('Tarifa inválida'); return }
     setSavingTarifa(true)
-    await updateQuiniela(active.id, { tarifa: val })
-    setActive(a => ({ ...a, tarifa: val }))
+    await updateQuiniela(active.id, { tarifa: val, tarifaMode })
+    setActive(a => ({ ...a, tarifa: val, tarifaMode }))
     toast.success('Tarifa guardada')
     setSavingTarifa(false)
   }
 
+  async function handleToggleStatus() {
+    setTogglingStatus(true)
+    const next = active.status === 'active' ? 'draft' : 'active'
+    await updateQuiniela(active.id, { status: next })
+    setActive(a => ({ ...a, status: next }))
+    toast.success(next === 'active'
+      ? '¡Quiniela iniciada! Los participantes ya pueden adquirir equipos.'
+      : 'Quiniela pausada.')
+    setTogglingStatus(false)
+  }
+
   async function handleAssign() {
-    if (!active || !participants.length) { toast.error('Sin participantes'); return }
+    if (!active) return
     setAssigning(true)
     try {
-      const { assignment, extraTeams: extras, perPerson } = assignTeams(participants.map(p => p.uid))
+      if (tarifaMode === 'por_equipo') {
+        // En modo por_equipo: carga todos los equipos disponibles al pool, sin tocar asignaciones
+        const pool = onlyAlive ? aliveTeams : TEAMS.map(t => t.code)
+        await updateQuiniela(active.id, { extraTeams: pool })
+        setActive(a => ({ ...a, extraTeams: pool }))
+        toast.success(`${pool.length} equipos cargados al pool`)
+        return
+      }
+      // Modo fija: distribución normal entre participantes
+      if (!participants.length) { toast.error('Sin participantes'); return }
+      const pool = onlyAlive ? aliveTeams : null
+      if (onlyAlive && aliveTeams.length < participants.length) {
+        toast.error(`Solo hay ${aliveTeams.length} equipos vivos para ${participants.length} participantes`)
+        return
+      }
+      const { assignment, extraTeams: extras, perPerson } = assignTeams(participants.map(p => p.uid), pool)
       await assignTeamsToParticipants(active.id, assignment)
       await updateQuiniela(active.id, { extraTeams: extras })
       setActive(a => ({ ...a, extraTeams: extras }))
+      const poolLabel = onlyAlive ? `${aliveTeams.length} vivos` : '48 equipos'
       const msg = extras.length
-        ? `${participants.length} participantes · ${perPerson} equipos c/u · ${extras.length} equipos extra disponibles`
-        : `${participants.length} participantes · ${perPerson} equipos c/u · distribución exacta`
+        ? `${participants.length} participantes · ${perPerson} equipos c/u · ${extras.length} extras (${poolLabel})`
+        : `${participants.length} participantes · ${perPerson} equipos c/u · distribución exacta (${poolLabel})`
       toast.success(msg)
     } finally {
       setAssigning(false)
@@ -197,6 +248,29 @@ export default function Admin() {
     toast.success('Apuesta compartida eliminada')
   }
 
+  async function handleDelete() {
+    setDeleting(true)
+    try {
+      await deleteQuiniela(active.id)
+      const updated = quinielas.filter(q => q.id !== active.id)
+      setQuinielas(updated)
+      if (updated.length > 0) {
+        setActive(updated[0])
+        setTarifaInput(updated[0].tarifa ?? '')
+        const ps = await getParticipants(updated[0].id)
+        setParticipants(ps)
+      } else {
+        setActive(null)
+        setParticipants([])
+        setTarifaInput('')
+      }
+      toast.success('Quiniela eliminada')
+      setShowDeleteConfirm(false)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   function copyInvite() {
     if (!active?.inviteCode) return
     navigator.clipboard.writeText(active.inviteCode)
@@ -237,9 +311,20 @@ export default function Admin() {
                 <h2 className="text-2xl font-black text-white">{active.name}</h2>
                 <p className="text-xs text-zinc-500 mt-1">ID: {active.id}</p>
               </div>
-              <button onClick={() => setShowCreate(true)} className="btn-outline text-xs flex items-center gap-1.5">
-                <Plus size={13} /> Nueva quiniela
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setShowCreate(true)} className="btn-outline text-xs flex items-center gap-1.5">
+                  <Plus size={13} /> Nueva quiniela
+                </button>
+                {active.adminUid === user.uid && (
+                  <button
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="btn-outline text-xs flex items-center gap-1.5 border-red-500/30 text-red-400 hover:bg-red-500/10 hover:border-red-500/50"
+                    title="Borrar quiniela"
+                  >
+                    <Trash2 size={13} /> Borrar
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Código de invitación */}
@@ -254,11 +339,63 @@ export default function Admin() {
               </button>
             </div>
 
+            {/* Estado */}
+            <div className="border-t border-zinc-800 pt-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs text-zinc-500 uppercase tracking-wider font-medium mb-1">Estado</p>
+                <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full ${
+                  active.status === 'active'
+                    ? 'bg-green-500/15 text-green-400'
+                    : 'bg-zinc-800 text-zinc-400'
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${active.status === 'active' ? 'bg-green-400' : 'bg-zinc-500'}`} />
+                  {active.status === 'active' ? 'Iniciada' : 'Borrador'}
+                </span>
+              </div>
+              <button
+                onClick={handleToggleStatus}
+                disabled={togglingStatus}
+                className={`btn-outline text-xs flex items-center gap-1.5 ${
+                  active.status === 'active'
+                    ? 'border-red-500/30 text-red-400 hover:bg-red-500/10'
+                    : 'border-green-500/30 text-green-400 hover:bg-green-500/10'
+                }`}
+              >
+                {togglingStatus ? '...' : active.status === 'active' ? '⏸ Pausar' : '▶ Iniciar quiniela'}
+              </button>
+            </div>
+
             {/* Tarifa de entrada */}
             <div className="border-t border-zinc-800 pt-4">
               <p className="text-xs text-zinc-500 uppercase tracking-wider font-medium mb-2 flex items-center gap-1.5">
-                <DollarSign size={13} /> Tarifa de entrada
+                <DollarSign size={13} />
+                {tarifaMode === 'por_equipo' ? 'Precio por equipo' : 'Tarifa de entrada'}
               </p>
+
+              {/* Modo de cobro */}
+              <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-700/50 rounded-lg p-0.5 w-fit mb-3">
+                <button
+                  onClick={() => setTarifaMode('fija')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+                    tarifaMode === 'fija'
+                      ? 'bg-zinc-700 text-white'
+                      : 'text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  Por participante
+                </button>
+                <button
+                  onClick={() => setTarifaMode('por_equipo')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+                    tarifaMode === 'por_equipo'
+                      ? 'bg-zinc-700 text-white'
+                      : 'text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  Por equipo
+                </button>
+              </div>
+
               <div className="flex items-center gap-3">
                 <div className="relative flex-1 max-w-xs">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-sm">$</span>
@@ -278,20 +415,21 @@ export default function Admin() {
                 </button>
                 {active.tarifa != null && (
                   <p className="text-sm text-zinc-300">
-                    Tarifa actual: <span className="font-black text-yellow-400">${Number(active.tarifa).toLocaleString('es-MX')}</span>
+                    Actual: <span className="font-black text-yellow-400">${Number(active.tarifa).toLocaleString('es-MX')}</span>
+                    <span className="text-zinc-500">{active.tarifaMode === 'por_equipo' ? '/equipo' : '/persona'}</span>
                   </p>
                 )}
               </div>
               {distribution && (
                 <p className="text-xs text-zinc-500 mt-2">
                   Con {participants.length} participante{participants.length !== 1 ? 's' : ''}:
-                  {' '}<span className="text-zinc-300">{TEAMS.length} ÷ {participants.length} = {distribution.perPerson} equipo{distribution.perPerson !== 1 ? 's' : ''} c/u</span>
+                  {' '}<span className="text-zinc-300">{distribution.total} ÷ {participants.length} = {distribution.perPerson} equipo{distribution.perPerson !== 1 ? 's' : ''} c/u</span>
                   {distribution.extra > 0
-                    ? <>, sobran <span className="text-yellow-400 font-semibold">{distribution.extra} equipos extra</span> disponibles a compra adicional</>
+                    ? <>, sobran <span className="text-yellow-400 font-semibold">{distribution.extra} en el pool</span> a compra adicional</>
                     : <span className="text-green-400"> · distribución exacta</span>
                   }
-                  {active.tarifa != null && distribution.extra > 0 &&
-                    <> a <span className="text-yellow-400">${Number(active.tarifa).toLocaleString('es-MX')}</span> c/u</>
+                  {active.tarifa != null && tarifaMode === 'por_equipo' &&
+                    <> · <span className="text-yellow-400">${Number(active.tarifa).toLocaleString('es-MX')}</span>/equipo</>
                   }
                 </p>
               )}
@@ -307,28 +445,67 @@ export default function Admin() {
                     </p>
                   </div>
                   <div className="ml-auto text-right text-xs text-zinc-500">
-                    <p>{participants.filter(p => p.paid).length} pagados</p>
-                    {participants.reduce((s, p) => s + (p.extrasBought ?? 0), 0) > 0 &&
-                      <p>+{participants.reduce((s, p) => s + (p.extrasBought ?? 0), 0)} extras</p>
-                    }
+                    {(active.tarifaMode ?? 'fija') === 'por_equipo' ? (
+                      <>
+                        <p>{participants.reduce((s, p) => s + (p.teams?.length ?? 0), 0)} equipos asignados</p>
+                        <p>× ${Number(active.tarifa).toLocaleString('es-MX')}/eq</p>
+                      </>
+                    ) : (
+                      <>
+                        <p>{participants.length} participantes</p>
+                        {participants.reduce((s, p) => s + (p.extrasBought ?? 0), 0) > 0 &&
+                          <p>+{participants.reduce((s, p) => s + (p.extrasBought ?? 0), 0)} extras</p>
+                        }
+                      </>
+                    )}
                   </div>
                 </div>
               )}
             </div>
           </div>
 
+          {/* ── Opción distribución ── */}
+          <div className="flex items-center justify-between bg-zinc-800/50 border border-zinc-700/50 rounded-xl px-4 py-3">
+            <div>
+              <p className="text-sm font-semibold text-white">Solo equipos vivos</p>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                {onlyAlive
+                  ? aliveTeams.length < TEAMS.length
+                    ? `${aliveTeams.length} de 48 equipos siguen en el torneo`
+                    : 'Todos los equipos siguen vivos (fase de grupos)'
+                  : '48 equipos — todos los del torneo'}
+              </p>
+            </div>
+            <button
+              onClick={() => setOnlyAlive(v => !v)}
+              className={`relative shrink-0 w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none ${
+                onlyAlive ? 'bg-yellow-500' : 'bg-zinc-600'
+              }`}
+              aria-checked={onlyAlive}
+              role="switch"
+            >
+              <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${
+                onlyAlive ? 'translate-x-5' : 'translate-x-0'
+              }`} />
+            </button>
+          </div>
+
           {/* ── Acciones ── */}
           <div className="grid sm:grid-cols-3 gap-4">
             <ActionCard
-              icon="🎲"
-              title="Asignar equipos"
-              desc={distribution
-                ? `${distribution.perPerson} equipos por persona · ${distribution.extra} extras`
-                : 'Agrega participantes primero'}
+              icon={tarifaMode === 'por_equipo' ? '📦' : '🎲'}
+              title={tarifaMode === 'por_equipo' ? 'Cargar pool' : 'Asignar equipos'}
+              desc={tarifaMode === 'por_equipo'
+                ? onlyAlive
+                  ? `Mueve los ${aliveTeams.length} equipos vivos al pool para adquisición libre`
+                  : 'Mueve los 48 equipos al pool para que los participantes los adquieran'
+                : distribution
+                  ? `${distribution.perPerson} eq/persona · ${distribution.extra} extras · pool: ${distribution.total}`
+                  : 'Agrega participantes primero'}
               action={handleAssign}
               loading={assigning}
-              label="Asignar al azar"
-              disabled={participants.length === 0}
+              label={tarifaMode === 'por_equipo' ? 'Cargar al pool' : 'Asignar al azar'}
+              disabled={tarifaMode !== 'por_equipo' && participants.length === 0}
             />
             <ActionCard
               icon="⚽"
@@ -426,7 +603,13 @@ export default function Admin() {
                           : 'bg-zinc-800 text-zinc-500 hover:bg-zinc-700 hover:text-zinc-300'
                       }`}
                     >
-                      {togglingPaid === p.uid ? '...' : p.paid ? '✓ Pagó' : 'Pendiente'}
+                      {togglingPaid === p.uid
+                        ? '...'
+                        : p.paid
+                          ? '✓ Pagó'
+                          : (active.tarifaMode === 'por_equipo' && active.tarifa && (p.teams?.length ?? 0) > 0)
+                            ? `Debe $${((p.teams?.length ?? 0) * active.tarifa).toLocaleString('es-MX')}`
+                            : 'Pendiente'}
                     </button>
 
                     <div className="text-right shrink-0">
@@ -531,6 +714,32 @@ export default function Admin() {
           >
             {savingBuddy ? 'Guardando...' : 'Guardar socio'}
           </button>
+        </div>
+      </Modal>
+
+      {/* Modal confirmar borrado */}
+      <Modal open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} title="Borrar quiniela">
+        <div className="space-y-4">
+          <p className="text-sm text-zinc-300 leading-relaxed">
+            ¿Seguro que quieres borrar <span className="font-bold text-white">"{active?.name}"</span>?
+            Se eliminarán todos los participantes y sus datos. Esta acción no se puede deshacer.
+          </p>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowDeleteConfirm(false)}
+              className="btn-outline flex-1"
+              disabled={deleting}
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="flex-1 py-2.5 px-4 rounded-xl font-bold text-sm bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {deleting ? 'Borrando...' : 'Sí, borrar'}
+            </button>
+          </div>
         </div>
       </Modal>
 

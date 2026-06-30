@@ -4,8 +4,11 @@ import { motion } from 'framer-motion'
 import { Trophy, TrendingUp, Users, RefreshCw, Globe, UserPlus } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useQuiniela } from '../context/QuinielaContext'
-import { listenParticipants, getAllQuinielas } from '../services/firestoreService'
+import { listenParticipants, getActiveQuinielaId } from '../services/firestoreService'
 import MatchCard from '../components/UI/MatchCard'
+import PoolTeams from '../components/UI/PoolTeams'
+import BuyTeamModal from '../components/UI/BuyTeamModal'
+import PrizePoolBanner from '../components/UI/PrizePoolBanner'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -31,19 +34,19 @@ function StatCard({ icon: Icon, label, value, color = 'yellow' }) {
 
 export default function Dashboard({ quinielaId }) {
   const { user } = useAuth()
-  const { matches, syncing, lastSync, syncScores } = useQuiniela()
+  const { matches, syncing, lastSync, syncScores, extraTeams } = useQuiniela()
+  const [buyModalOpen, setBuyModalOpen] = useState(false)
   const [participants, setParticipants] = useState([])
-  const [quinielas, setQuinielas]       = useState([])
+  const [activeId, setActiveId]         = useState(quinielaId ?? null)
   const [myPoints, setMyPoints]         = useState(0)
   const [myRank, setMyRank]             = useState(null)
   const [isParticipant, setIsParticipant] = useState(false)
 
   useEffect(() => {
-    getAllQuinielas().then(setQuinielas)
-  }, [])
+    if (quinielaId) return
+    getActiveQuinielaId(user.uid).then(setActiveId)
+  }, [user?.uid])
 
-  // Si hay quiniela activa, escuchar participantes
-  const activeId = quinielaId ?? quinielas[0]?.id
   useEffect(() => {
     if (!activeId) return
     return listenParticipants(activeId, (ps) => {
@@ -80,14 +83,26 @@ export default function Dashboard({ quinielaId }) {
             {user?.displayName} <span className="gold-text">⚽</span>
           </h1>
           <p className="text-zinc-500 mt-2 text-sm">FIFA World Cup 2026 · USA / México / Canadá</p>
-          {quinielas.length > 0 && !isParticipant && (
+          {activeId && !isParticipant && (
             <Link to="/join" className="inline-flex items-center gap-2 mt-4 btn-gold text-xs py-1.5 px-3">
               <UserPlus size={13} /> Unirme a la quiniela
             </Link>
           )}
+          {isParticipant && (
+            <button
+              onClick={() => setBuyModalOpen(true)}
+              className="inline-flex items-center gap-2 mt-4 btn-outline text-xs py-1.5 px-3 border-yellow-500/40 text-yellow-400 hover:bg-yellow-500/10"
+            >
+              ⚡ Conseguir equipo
+              {extraTeams.length > 0 && ` (${extraTeams.length} en pool)`}
+            </button>
+          )}
         </div>
         <div className="absolute -right-4 -top-4 text-[120px] opacity-5 select-none">🏆</div>
       </motion.div>
+
+      {/* Premio */}
+      <PrizePoolBanner />
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -155,6 +170,8 @@ export default function Dashboard({ quinielaId }) {
           </div>
         </section>
       )}
+
+      <BuyTeamModal open={buyModalOpen} onClose={() => setBuyModalOpen(false)} />
     </div>
   )
 }

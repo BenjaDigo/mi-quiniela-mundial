@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { TEAM_MAP } from '../../data/teams'
+import TeamCrest from './TeamCrest'
 
 const CARD_H = 54
 const CARD_W = 156
@@ -8,8 +9,8 @@ const UNIT   = 72   // altura de un "slot" base
 const TOTAL  = 16 * UNIT  // 1152px altura total
 
 const ROUNDS = [
-  { key: 'ROUND_OF_32',    label: '32avos', count: 16 },
-  { key: 'ROUND_OF_16',    label: '16avos', count: 8  },
+  { key: 'LAST_32',        label: '32avos', count: 16 },
+  { key: 'LAST_16',        label: '16avos', count: 8  },
   { key: 'QUARTER_FINALS', label: 'Cuartos', count: 4  },
   { key: 'SEMI_FINALS',    label: 'Semis',   count: 2  },
   { key: 'FINAL',          label: 'Final',   count: 1  },
@@ -31,18 +32,31 @@ function BracketCard({ match, myTeams }) {
   const hMine = myTeams.includes(hTLA)
   const aMine = myTeams.includes(aTLA)
 
-  function Row({ tla, score, isMine }) {
+  // winner: para terminados usa score.winner (cubre penales), fallback a goles
+  const winner = match?.score?.winner
+  const hWins = done && (winner === 'HOME_TEAM' || (!winner && hs != null && hs > as_))
+  const aWins = done && (winner === 'AWAY_TEAM' || (!winner && as_ != null && as_ > hs))
+  const hLeads = live && hs != null && as_ != null && hs > as_
+  const aLeads = live && hs != null && as_ != null && as_ > hs
+
+  function Row({ tla, score, isMine, isGreen }) {
     const t = TEAM_MAP[tla]
     return (
-      <div className={`flex items-center justify-between px-2.5 ${isMine ? 'bg-yellow-500/10' : ''}`}
-           style={{ height: (CARD_H - 1) / 2 }}>
-        <span className={`text-[11px] font-semibold truncate leading-none ${
-          isMine ? 'text-yellow-400' : tla ? 'text-white' : 'text-zinc-600'
-        }`}>
-          {t ? `${t.flag} ${t.name}` : tla ?? 'Por definir'}
-        </span>
+      <div className={`flex items-center justify-between px-2.5 gap-1.5 ${
+        isGreen ? 'bg-green-500/15' : isMine ? 'bg-yellow-500/10' : ''
+      }`} style={{ height: (CARD_H - 1) / 2 }}>
+        <div className="flex items-center gap-1.5 min-w-0">
+          {t && <TeamCrest team={t} size={14} className="shrink-0" />}
+          <span className={`text-[11px] font-semibold truncate leading-none ${
+            isGreen ? 'text-green-400' : isMine ? 'text-yellow-400' : tla ? 'text-white' : 'text-zinc-600'
+          }`}>
+            {t ? t.name : tla ?? 'Por definir'}
+          </span>
+        </div>
         {(done || live) && tla && (
-          <span className="text-xs font-black text-white ml-1 shrink-0">{score ?? 0}</span>
+          <span className={`text-xs font-black ml-1 shrink-0 ${isGreen ? 'text-green-400' : 'text-white'}`}>
+            {score ?? 0}
+          </span>
         )}
       </div>
     )
@@ -54,9 +68,9 @@ function BracketCard({ match, myTeams }) {
       (hMine || aMine) ? 'border-yellow-500/40 bg-zinc-900' :
                          'border-zinc-700/70 bg-zinc-900'
     }`} style={{ width: CARD_W, height: CARD_H }}>
-      <Row tla={hTLA} score={hs} isMine={hMine} />
+      <Row tla={hTLA} score={hs} isMine={hMine} isGreen={hWins || hLeads} />
       <div className="border-t border-zinc-800" />
-      <Row tla={aTLA} score={as_} isMine={aMine} />
+      <Row tla={aTLA} score={as_} isMine={aMine} isGreen={aWins || aLeads} />
     </div>
   )
 }

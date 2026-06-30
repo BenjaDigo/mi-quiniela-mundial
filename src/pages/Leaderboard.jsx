@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
-import { listenParticipants, getAllQuinielas } from '../services/firestoreService'
+import { listenParticipants, getActiveQuinielaId, getQuiniela } from '../services/firestoreService'
 import { TEAM_MAP } from '../data/teams'
 import LoadingSpinner from '../components/UI/LoadingSpinner'
+import PrizePoolBanner from '../components/UI/PrizePoolBanner'
 
 const MEDALS = ['🥇', '🥈', '🥉']
 
@@ -70,18 +71,20 @@ export default function Leaderboard() {
   const [quinielaName, setQuinielName]  = useState('')
 
   useEffect(() => {
+    let unsub
     async function load() {
-      const qs = await getAllQuinielas()
-      if (!qs.length) { setLoading(false); return }
-      setQuinielName(qs[0].name ?? 'Quiniela Mundial')
-      const unsub = listenParticipants(qs[0].id, ps => {
+      const id = await getActiveQuinielaId(user.uid)
+      if (!id) { setLoading(false); return }
+      const q = await getQuiniela(id)
+      setQuinielName(q?.name ?? 'Quiniela Mundial')
+      unsub = listenParticipants(id, ps => {
         setParticipants(ps)
         setLoading(false)
       })
-      return unsub
     }
     load()
-  }, [])
+    return () => unsub?.()
+  }, [user?.uid])
 
   if (loading) return <LoadingSpinner text="Cargando clasificación..." />
 
@@ -93,6 +96,9 @@ export default function Leaderboard() {
         <h1 className="text-3xl font-black text-white">{quinielaName}</h1>
         <p className="text-zinc-500 mt-1 text-sm">{participants.length} participantes · Clasificación en tiempo real</p>
       </motion.div>
+
+      {/* Premio */}
+      <PrizePoolBanner className="mb-8" />
 
       {/* Podium top 3 */}
       {participants.length >= 3 && (

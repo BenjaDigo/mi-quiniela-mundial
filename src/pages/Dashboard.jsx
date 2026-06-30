@@ -37,9 +37,8 @@ export default function Dashboard({ quinielaId }) {
   const { matches, syncing, lastSync, syncScores, extraTeams } = useQuiniela()
   const [buyModalOpen, setBuyModalOpen] = useState(false)
   const [participants, setParticipants] = useState([])
-  const [activeId, setActiveId]         = useState(quinielaId ?? null)
-  const [myPoints, setMyPoints]         = useState(0)
-  const [myRank, setMyRank]             = useState(null)
+  const [activeId, setActiveId]           = useState(quinielaId ?? null)
+  const [myRank, setMyRank]               = useState(null)
   const [isParticipant, setIsParticipant] = useState(false)
 
   useEffect(() => {
@@ -54,7 +53,6 @@ export default function Dashboard({ quinielaId }) {
       const me = ps.find(p => p.uid === user?.uid)
       setIsParticipant(!!me)
       if (me) {
-        setMyPoints(me.points ?? 0)
         setMyRank((ps.findIndex(p => p.uid === user?.uid) + 1) || null)
       }
     })
@@ -107,10 +105,9 @@ export default function Dashboard({ quinielaId }) {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { icon: Trophy,    label: 'Mis puntos',     value: myPoints,              color: 'yellow' },
-          { icon: TrendingUp,label: 'Mi posición',    value: myRank ? `#${myRank}` : '-', color: 'green' },
-          { icon: Users,     label: 'Participantes',  value: participants.length,   color: 'blue'   },
-          { icon: Globe,     label: 'En vivo',        value: liveMatches.length,    color: 'red'    },
+          { icon: TrendingUp, label: 'Mi posición',   value: myRank ? `#${myRank}` : '-', color: 'yellow' },
+          { icon: Users,      label: 'Participantes', value: participants.length,          color: 'blue'   },
+          { icon: Globe,      label: 'En vivo',       value: liveMatches.length,           color: 'red'    },
         ].map((s, i) => (
           <motion.div key={i} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.08 }}>
@@ -164,7 +161,7 @@ export default function Dashboard({ quinielaId }) {
                   <p className="font-semibold text-white text-sm">{p.displayName}</p>
                   <p className="text-xs text-zinc-500">{p.teams?.length ?? 0} selecciones</p>
                 </div>
-                <span className="text-yellow-400 font-black text-lg">{p.points ?? 0}</span>
+                <span className="text-zinc-400 text-sm">{p.teams?.length ?? 0} equipos</span>
               </motion.div>
             ))}
           </div>

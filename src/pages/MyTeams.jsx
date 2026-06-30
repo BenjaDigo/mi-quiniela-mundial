@@ -8,14 +8,11 @@ import TeamCard from '../components/UI/TeamCard'
 import PoolTeams from '../components/UI/PoolTeams'
 import PrizePoolBanner from '../components/UI/PrizePoolBanner'
 import LoadingSpinner from '../components/UI/LoadingSpinner'
-import { calcTeamPoints } from '../utils/scoring'
-
 export default function MyTeams() {
   const { user } = useAuth()
   const { matches } = useQuiniela()
-  const [myTeams, setMyTeams]     = useState(null)
-  const [totalPts, setTotalPts]   = useState(0)
-  const [loading, setLoading]     = useState(true)
+  const [myTeams, setMyTeams] = useState(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function load() {
@@ -23,18 +20,11 @@ export default function MyTeams() {
       if (!qId) { setMyTeams([]); setLoading(false); return }
       const participants = await getParticipants(qId)
       const me = participants.find(p => p.uid === user?.uid)
-      if (me) {
-        setMyTeams(me.teams ?? [])
-        const pts = (me.teams ?? []).reduce((acc, code) =>
-          acc + calcTeamPoints(code, matches), 0)
-        setTotalPts(pts)
-      } else {
-        setMyTeams([])
-      }
+      setMyTeams(me?.teams ?? [])
       setLoading(false)
     }
     load()
-  }, [user, matches])
+  }, [user])
 
   if (loading) return <LoadingSpinner text="Cargando tus selecciones..." />
 
@@ -53,17 +43,7 @@ export default function MyTeams() {
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
         <h1 className="text-3xl font-black text-white">Mis selecciones</h1>
-        <p className="text-zinc-500 mt-1 text-sm">Tienes {myTeams.length} equipos — {totalPts} puntos acumulados</p>
-      </motion.div>
-
-      {/* Total points banner */}
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}
-        className="card p-5 mb-8 flex items-center gap-5 border-yellow-500/20 bg-yellow-500/5">
-        <span className="text-4xl">🏆</span>
-        <div>
-          <p className="text-xs text-zinc-400 uppercase tracking-wider font-medium">Puntos totales</p>
-          <p className="text-4xl font-black gold-text">{totalPts}</p>
-        </div>
+        <p className="text-zinc-500 mt-1 text-sm">{myTeams.length} selecciones asignadas</p>
       </motion.div>
 
       {/* Premio y pool */}
@@ -72,17 +52,14 @@ export default function MyTeams() {
 
       {/* Teams grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-        {myTeams.map((code, i) => {
-          const pts = calcTeamPoints(code, matches)
-          return (
-            <motion.div key={code}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: i * 0.04 }}>
-              <TeamCard code={code} points={pts} />
-            </motion.div>
-          )
-        })}
+        {myTeams.map((code, i) => (
+          <motion.div key={code}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: i * 0.04 }}>
+            <TeamCard code={code} />
+          </motion.div>
+        ))}
       </div>
     </div>
   )

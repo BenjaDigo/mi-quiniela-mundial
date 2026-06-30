@@ -22,7 +22,7 @@ function nanoid() {
 
 export default function Admin() {
   const { user } = useAuth()
-  const { matches, syncScores, syncing } = useQuiniela()
+  const { matches, syncScores, syncing, quinielaInfo } = useQuiniela()
 
   const [quinielas, setQuinielas]     = useState([])
   const [active, setActive]           = useState(null)
@@ -139,12 +139,16 @@ export default function Admin() {
 
   async function handleToggleStatus() {
     setTogglingStatus(true)
-    const next = active.status === 'active' ? 'draft' : 'active'
+    const next = active.status === 'finished' ? 'finished'
+               : active.status === 'active'   ? 'finished'
+               :                                'active'
     await updateQuiniela(active.id, { status: next })
     setActive(a => ({ ...a, status: next }))
-    toast.success(next === 'active'
-      ? '¡Quiniela iniciada! Los participantes ya pueden adquirir equipos.'
-      : 'Quiniela pausada.')
+    toast.success(
+      next === 'active'   ? '¡Quiniela iniciada! Los participantes ya pueden adquirir equipos.' :
+      next === 'finished' ? '🏁 Quiniela finalizada.' :
+                            'Quiniela pausada.'
+    )
     setTogglingStatus(false)
   }
 
@@ -281,6 +285,34 @@ export default function Admin() {
 
   if (loading) return <LoadingSpinner text="Cargando panel admin..." />
 
+  // Bloquear a participantes (quiniela activa que no administran)
+  const isOnlyParticipant = quinielaInfo
+    && quinielaInfo.adminUid !== user.uid
+    && quinielaInfo.status !== 'finished'
+  if (isOnlyParticipant) {
+    return (
+      <div className="min-h-[70vh] flex items-center justify-center px-4">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="card max-w-md w-full p-8 text-center border-zinc-700"
+        >
+          <div className="text-5xl mb-4">🔒</div>
+          <h2 className="text-xl font-black text-white mb-3">Acceso restringido</h2>
+          <p className="text-zinc-400 text-sm leading-relaxed">
+            Actualmente solo puedes participar en una quiniela activa. Si deseas
+            administrar tu propia quiniela, espera a que la actual termine o ingresa
+            con una cuenta diferente.
+          </p>
+          <div className="mt-6 pt-5 border-t border-zinc-800 text-xs text-zinc-600">
+            Quiniela activa:{' '}
+            <span className="text-zinc-400 font-semibold">{quinielaInfo.name}</span>
+          </div>
+        </motion.div>
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
 
@@ -344,25 +376,30 @@ export default function Admin() {
               <div>
                 <p className="text-xs text-zinc-500 uppercase tracking-wider font-medium mb-1">Estado</p>
                 <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full ${
-                  active.status === 'active'
-                    ? 'bg-green-500/15 text-green-400'
-                    : 'bg-zinc-800 text-zinc-400'
+                  active.status === 'active'   ? 'bg-green-500/15 text-green-400' :
+                  active.status === 'finished' ? 'bg-zinc-700 text-zinc-300'      :
+                                                 'bg-zinc-800 text-zinc-400'
                 }`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${active.status === 'active' ? 'bg-green-400' : 'bg-zinc-500'}`} />
-                  {active.status === 'active' ? 'Iniciada' : 'Borrador'}
+                  <span className={`w-1.5 h-1.5 rounded-full ${
+                    active.status === 'active'   ? 'bg-green-400' :
+                    active.status === 'finished' ? 'bg-zinc-400'  : 'bg-zinc-500'
+                  }`} />
+                  {active.status === 'active' ? 'Iniciada' : active.status === 'finished' ? 'Finalizada' : 'Borrador'}
                 </span>
               </div>
-              <button
-                onClick={handleToggleStatus}
-                disabled={togglingStatus}
-                className={`btn-outline text-xs flex items-center gap-1.5 ${
-                  active.status === 'active'
-                    ? 'border-red-500/30 text-red-400 hover:bg-red-500/10'
-                    : 'border-green-500/30 text-green-400 hover:bg-green-500/10'
-                }`}
-              >
-                {togglingStatus ? '...' : active.status === 'active' ? '⏸ Pausar' : '▶ Iniciar quiniela'}
-              </button>
+              {active.status !== 'finished' && (
+                <button
+                  onClick={handleToggleStatus}
+                  disabled={togglingStatus}
+                  className={`btn-outline text-xs flex items-center gap-1.5 ${
+                    active.status === 'active'
+                      ? 'border-red-500/30 text-red-400 hover:bg-red-500/10'
+                      : 'border-green-500/30 text-green-400 hover:bg-green-500/10'
+                  }`}
+                >
+                  {togglingStatus ? '...' : active.status === 'active' ? '🏁 Finalizar' : '▶ Iniciar quiniela'}
+                </button>
+              )}
             </div>
 
             {/* Tarifa de entrada */}
@@ -515,15 +552,6 @@ export default function Admin() {
               loading={syncing}
               label="Sincronizar API"
             />
-            <ActionCard
-              icon="📊"
-              title="Recalcular puntos"
-              desc="Recalcula los puntos de todos según resultados actuales"
-              action={handleUpdatePoints}
-              loading={updatingPts}
-              label="Actualizar puntos"
-              disabled={matches.length === 0}
-            />
           </div>
 
           {/* ── Equipos Extra ── */}
@@ -615,11 +643,6 @@ export default function Admin() {
                     <div className="text-right shrink-0">
                       <p className="text-xs text-zinc-500">Equipos</p>
                       <p className="font-bold text-sm text-zinc-300">{p.teams?.length ?? 0}</p>
-                    </div>
-
-                    <div className="text-right shrink-0">
-                      <p className="text-xs text-zinc-500">Puntos</p>
-                      <p className="font-black text-yellow-400">{p.points ?? 0}</p>
                     </div>
 
                     <div className="text-xs text-zinc-600 hidden md:block w-24 truncate shrink-0">

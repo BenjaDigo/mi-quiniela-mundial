@@ -83,7 +83,7 @@ export default function Dashboard({ quinielaId }) {
             {user?.displayName} <span className="gold-text">⚽</span>
           </h1>
           <p className="text-zinc-500 mt-2 text-sm">FIFA World Cup 2026 · USA / México / Canadá</p>
-          {activeId && !isParticipant && (
+          {!isParticipant && (
             <Link to="/join" className="inline-flex items-center gap-2 mt-4 btn-gold text-xs py-1.5 px-3">
               <UserPlus size={13} /> Unirme a la quiniela
             </Link>

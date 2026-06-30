@@ -93,6 +93,17 @@ export async function assignTeamsToParticipants(quinielaId, assignment) {
   await batch.commit()
 }
 
+export async function resetParticipantTeams(quinielaId, participantUids) {
+  const batch = writeBatch(db)
+  for (const uid of participantUids) {
+    batch.update(doc(db, 'quinielas', quinielaId, 'participants', uid), {
+      teams: [],
+      extrasBought: 0,
+    })
+  }
+  await batch.commit()
+}
+
 export async function updateParticipantPoints(quinielaId, uid, points) {
   await updateDoc(doc(db, 'quinielas', quinielaId, 'participants', uid), { points })
 }

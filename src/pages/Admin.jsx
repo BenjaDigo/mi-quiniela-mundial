@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { useQuiniela } from '../context/QuinielaContext'
 import {
   createQuiniela, getMyQuinielas, updateQuiniela, deleteQuiniela,
-  getParticipants, assignTeamsToParticipants,
+  getParticipants, assignTeamsToParticipants, resetParticipantTeams,
   updateParticipantPoints, listenParticipants,
   markParticipantPaid, assignExtraTeam, setShareBuddy, saveUserProfile,
   updateDisabledTeams,
@@ -181,6 +181,8 @@ export default function Admin() {
       const pool      = basePool.filter(c => !disabled.has(c))
 
       if (tarifaMode === 'por_equipo') {
+        const uids = participants.map(p => p.uid)
+        if (uids.length) await resetParticipantTeams(active.id, uids)
         await updateQuiniela(active.id, { extraTeams: pool })
         setActive(a => ({ ...a, extraTeams: pool }))
         toast.success(`${pool.length} equipos cargados al pool`)

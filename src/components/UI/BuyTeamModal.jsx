@@ -1,18 +1,18 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../context/AuthContext'
 import { useQuiniela } from '../../context/QuinielaContext'
 import { assignExtraTeam } from '../../services/firestoreService'
-import { TEAM_MAP, TEAMS } from '../../data/teams'
+import { TEAM_MAP } from '../../data/teams'
+import { getAliveTeams } from '../../utils/teamAssignment'
 import TeamCrest from './TeamCrest'
-
-const ALL_CODES = TEAMS.map(t => t.code)
 
 export default function BuyTeamModal({ open, onClose }) {
   const { user } = useAuth()
-  const { extraTeams, activeQuinielaId, quinielaInfo } = useQuiniela()
+  const { extraTeams, activeQuinielaId, quinielaInfo, matches } = useQuiniela()
+  const aliveTeams = useMemo(() => getAliveTeams(matches), [matches])
 
   const [phase, setPhase]         = useState('confirm') // 'confirm' | 'revealing' | 'result'
   const [cycleCode, setCycleCode] = useState(null)
@@ -38,7 +38,7 @@ export default function BuyTeamModal({ open, onClose }) {
     let i = 0
     function tick() {
       if (i < schedule.length - 1) {
-        setCycleCode(ALL_CODES[Math.floor(Math.random() * ALL_CODES.length)])
+        setCycleCode(aliveTeams[Math.floor(Math.random() * aliveTeams.length)])
         intervalRef.current = setTimeout(tick, schedule[i++])
       } else {
         setCycleCode(finalCode)
@@ -158,13 +158,13 @@ export default function BuyTeamModal({ open, onClose }) {
               {/* Pool disponible */}
               <div>
                 <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2 flex items-center gap-2">
-                  Pool disponible
+                  Equipos en juego
                   <span className="badge bg-yellow-500/20 text-yellow-400 font-bold px-2">
-                    {extraTeams.length}
+                    {extraTeams.length} disponibles
                   </span>
                 </p>
                 <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pr-1">
-                  {extraTeams.map(code => {
+                  {aliveTeams.map(code => {
                     const t = TEAM_MAP[code]
                     return (
                       <span key={code} className="badge bg-zinc-800 text-zinc-300 text-xs gap-1.5 py-1 px-2 items-center">

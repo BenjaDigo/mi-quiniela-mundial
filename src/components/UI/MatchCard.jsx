@@ -14,6 +14,8 @@ const STATUS_LABEL = {
 
 const STAGE_LABEL = {
   GROUP_STAGE:    'Fase de Grupos',
+  LAST_32:        '32avos de Final',
+  LAST_16:        '16avos de Final',
   ROUND_OF_32:    '32avos de Final',
   ROUND_OF_16:    '16avos de Final',
   QUARTER_FINALS: 'Cuartos de Final',
@@ -22,16 +24,17 @@ const STAGE_LABEL = {
   FINAL:          'Gran Final',
 }
 
-function TeamSide({ tla, score, side, isMine }) {
+function TeamSide({ tla, score, side, isMine, calculated }) {
   const team = TEAM_MAP[tla]
   const isLeft = side === 'left'
   return (
     <div className={`flex items-center gap-3 ${isLeft ? 'flex-row' : 'flex-row-reverse'} flex-1`}>
       <span className="text-3xl">{team?.flag ?? '🏳️'}</span>
       <div className={isLeft ? 'text-left' : 'text-right'}>
-        <p className={`font-bold text-sm leading-tight ${isMine ? 'text-yellow-400' : 'text-white'}`}>
-          {team?.name ?? tla}
+        <p className={`font-bold text-sm leading-tight ${isMine ? 'text-yellow-400' : calculated ? 'text-zinc-300' : 'text-white'}`}>
+          {team?.name ?? tla ?? '—'}
           {isMine && <span className="ml-1 text-yellow-500 text-[10px]">★</span>}
+          {calculated && !isMine && <span className="ml-1 text-zinc-500 text-[10px]">~</span>}
         </p>
         <p className="text-[10px] text-zinc-500">{team?.confederation ?? ''}</p>
       </div>
@@ -43,7 +46,7 @@ function TeamSide({ tla, score, side, isMine }) {
 }
 
 export default function MatchCard({ match, myTeams = [] }) {
-  const { homeTeam, awayTeam, score, status, utcDate, stage, group } = match
+  const { homeTeam, awayTeam, score, status, utcDate, stage, group, _homeCalc, _awayCalc } = match
 
   const homeTLA = homeTeam?.tla ?? homeTeam?.shortName
   const awayTLA = awayTeam?.tla ?? awayTeam?.shortName
@@ -81,14 +84,14 @@ export default function MatchCard({ match, myTeams = [] }) {
 
       {/* Teams + score */}
       <div className="flex items-center gap-2">
-        <TeamSide tla={homeTLA} score={hs} side="left"  isMine={homeIsMine} />
+        <TeamSide tla={homeTLA} score={hs} side="left"  isMine={homeIsMine} calculated={_homeCalc} />
         <div className="text-center shrink-0">
           {!isFinished && !isLive
             ? <p className="text-xs text-zinc-500 font-medium">{dateStr}</p>
             : <span className="text-zinc-500 font-bold">vs</span>
           }
         </div>
-        <TeamSide tla={awayTLA} score={as_} side="right" isMine={awayIsMine} />
+        <TeamSide tla={awayTLA} score={as_} side="right" isMine={awayIsMine} calculated={_awayCalc} />
       </div>
     </div>
   )

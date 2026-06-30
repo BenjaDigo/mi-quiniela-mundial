@@ -107,6 +107,10 @@ export async function saveMatches(matches) {
   await batch.commit()
 }
 
+export async function updateDisabledTeams(quinielaId, codes) {
+  await updateDoc(doc(db, 'quinielas', quinielaId), { disabledTeams: codes })
+}
+
 export function listenMatches(cb) {
   return onSnapshot(collection(db, 'matches'), snap => {
     cb(snap.docs.map(d => d.data()))

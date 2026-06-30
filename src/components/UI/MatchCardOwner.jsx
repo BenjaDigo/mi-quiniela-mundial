@@ -12,6 +12,8 @@ const STATUS_LABEL = {
 
 const STAGE_LABEL = {
   GROUP_STAGE:    'Fase de Grupos',
+  LAST_32:        '32avos',
+  LAST_16:        '16avos',
   ROUND_OF_32:    '32avos',
   ROUND_OF_16:    '16avos',
   QUARTER_FINALS: 'Cuartos',
@@ -44,7 +46,7 @@ function Avatar({ participant, isMe }) {
   )
 }
 
-function OwnerSide({ tla, participant, isMe, align }) {
+function OwnerSide({ tla, participant, isMe, align, calculated }) {
   const team = TEAM_MAP[tla]
   const isLeft = align === 'left'
 
@@ -68,7 +70,9 @@ function OwnerSide({ tla, participant, isMe, align }) {
                 className="object-cover rounded-sm shadow-sm shrink-0" />
             : <span className="text-sm">{team.flag}</span>
           }
-          <span className="text-xs text-zinc-400 truncate">{team?.name ?? tla}</span>
+          <span className={`text-xs truncate ${calculated ? 'text-zinc-500 italic' : 'text-zinc-400'}`}>
+            {team?.name ?? tla}{calculated ? ' ~' : ''}
+          </span>
         </div>
       )}
     </div>
@@ -76,7 +80,7 @@ function OwnerSide({ tla, participant, isMe, align }) {
 }
 
 export default function MatchCardOwner({ match, teamOwnerMap = {}, currentUid }) {
-  const { homeTeam, awayTeam, score, status, utcDate, stage, group } = match
+  const { homeTeam, awayTeam, score, status, utcDate, stage, group, _homeCalc, _awayCalc } = match
   const homeTLA   = homeTeam?.tla ?? homeTeam?.shortName
   const awayTLA   = awayTeam?.tla ?? awayTeam?.shortName
   const hs        = score?.fullTime?.home
@@ -114,7 +118,7 @@ export default function MatchCardOwner({ match, teamOwnerMap = {}, currentUid })
 
       {/* Duelo */}
       <div className="flex items-center gap-2">
-        <OwnerSide tla={homeTLA} participant={homeOwner} isMe={homeOwner?.uid === currentUid} align="left" />
+        <OwnerSide tla={homeTLA} participant={homeOwner} isMe={homeOwner?.uid === currentUid} align="left"  calculated={_homeCalc} />
 
         <div className="shrink-0 flex flex-col items-center gap-1 w-16">
           {isFinished || isLive
@@ -126,7 +130,7 @@ export default function MatchCardOwner({ match, teamOwnerMap = {}, currentUid })
           )}
         </div>
 
-        <OwnerSide tla={awayTLA} participant={awayOwner} isMe={awayOwner?.uid === currentUid} align="right" />
+        <OwnerSide tla={awayTLA} participant={awayOwner} isMe={awayOwner?.uid === currentUid} align="right" calculated={_awayCalc} />
       </div>
     </div>
   )

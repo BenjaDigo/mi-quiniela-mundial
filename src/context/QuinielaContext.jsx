@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { listenMatches, saveMatches, getActiveQuinielaId, listenActiveQuinielaId, listenQuiniela, listenParticipants, syncParticipantPhoto } from '../services/firestoreService'
 import { fetchMatches } from '../services/footballApi'
+import { resolveBracket } from '../utils/bracketResolver'
 import { useAuth } from './AuthContext'
 
 const QuinielaContext = createContext(null)
@@ -19,7 +20,7 @@ export function QuinielaProvider({ children }) {
   const timerRef = useRef(null)
 
   useEffect(() => {
-    const unsub = listenMatches(setMatches)
+    const unsub = listenMatches(raw => setMatches(resolveBracket(raw)))
     syncScores()
     return unsub
   }, [])

@@ -9,10 +9,13 @@ import {
   getParticipants, assignTeamsToParticipants,
   updateParticipantPoints, listenParticipants,
   markParticipantPaid, assignExtraTeam, setShareBuddy, saveUserProfile,
+  updateDisabledTeams,
 } from '../services/firestoreService'
 import { assignTeams, getAliveTeams } from '../utils/teamAssignment'
 import { calcParticipantPoints, DEFAULT_SCORING } from '../utils/scoring'
-import { TEAM_MAP, TEAMS } from '../data/teams'
+import { TEAM_MAP, TEAMS, CONFEDERATION_COLORS } from '../data/teams'
+
+const CONFEDERATION_ORDER = ['CONMEBOL', 'CONCACAF', 'UEFA', 'CAF', 'AFC', 'OFC']
 import Modal from '../components/UI/Modal'
 import LoadingSpinner from '../components/UI/LoadingSpinner'
 
@@ -46,6 +49,9 @@ export default function Admin() {
 
   // distribución: solo vivos
   const [onlyAlive, setOnlyAlive] = useState(false)
+
+  // pool: gestión manual de equipos excluidos
+  const [showPoolManager, setShowPoolManager] = useState(false)
 
   // estado quiniela
   const [togglingStatus, setTogglingStatus] = useState(false)
@@ -90,11 +96,13 @@ export default function Admin() {
   const distribution = useMemo(() => {
     const n = participants.length
     if (!n) return null
-    const pool      = onlyAlive ? aliveTeams : TEAMS
+    const disabled  = new Set(active?.disabledTeams ?? [])
+    const basePool  = onlyAlive ? aliveTeams : TEAMS.map(t => t.code)
+    const pool      = basePool.filter(c => !disabled.has(c))
     const perPerson = tarifaMode === 'por_equipo' ? 1 : Math.floor(pool.length / n)
     const extra     = pool.length - perPerson * n
     return { perPerson, extra, total: pool.length }
-  }, [participants.length, onlyAlive, aliveTeams, tarifaMode])
+  }, [participants.length, onlyAlive, aliveTeams, tarifaMode, active?.disabledTeams])
 
   const extraTeams = active?.extraTeams ?? []
 
@@ -152,33 +160,46 @@ export default function Admin() {
     setTogglingStatus(false)
   }
 
+  async function handleToggleTeam(code) {
+    const current = active?.disabledTeams ?? []
+    const next = current.includes(code) ? current.filter(c => c !== code) : [...current, code]
+    await updateDisabledTeams(active.id, next)
+    setActive(a => ({ ...a, disabledTeams: next }))
+  }
+
+  async function handleResetDisabled() {
+    await updateDisabledTeams(active.id, [])
+    setActive(a => ({ ...a, disabledTeams: [] }))
+  }
+
   async function handleAssign() {
     if (!active) return
     setAssigning(true)
     try {
+      const disabled  = new Set(active?.disabledTeams ?? [])
+      const basePool  = onlyAlive ? aliveTeams : TEAMS.map(t => t.code)
+      const pool      = basePool.filter(c => !disabled.has(c))
+
       if (tarifaMode === 'por_equipo') {
-        // En modo por_equipo: carga todos los equipos disponibles al pool, sin tocar asignaciones
-        const pool = onlyAlive ? aliveTeams : TEAMS.map(t => t.code)
         await updateQuiniela(active.id, { extraTeams: pool })
         setActive(a => ({ ...a, extraTeams: pool }))
         toast.success(`${pool.length} equipos cargados al pool`)
         return
       }
-      // Modo fija: distribución normal entre participantes
       if (!participants.length) { toast.error('Sin participantes'); return }
-      const pool = onlyAlive ? aliveTeams : null
-      if (onlyAlive && aliveTeams.length < participants.length) {
-        toast.error(`Solo hay ${aliveTeams.length} equipos vivos para ${participants.length} participantes`)
+      if (pool.length < participants.length) {
+        toast.error(`Solo hay ${pool.length} equipos disponibles para ${participants.length} participantes`)
         return
       }
       const { assignment, extraTeams: extras, perPerson } = assignTeams(participants.map(p => p.uid), pool)
       await assignTeamsToParticipants(active.id, assignment)
       await updateQuiniela(active.id, { extraTeams: extras })
       setActive(a => ({ ...a, extraTeams: extras }))
-      const poolLabel = onlyAlive ? `${aliveTeams.length} vivos` : '48 equipos'
+      const disabledCount = disabled.size
+      const poolLabel = `${pool.length} equipos${disabledCount ? ` (${disabledCount} excluidos)` : ''}`
       const msg = extras.length
-        ? `${participants.length} participantes · ${perPerson} equipos c/u · ${extras.length} extras (${poolLabel})`
-        : `${participants.length} participantes · ${perPerson} equipos c/u · distribución exacta (${poolLabel})`
+        ? `${participants.length} participantes · ${perPerson} equipos c/u · ${extras.length} extras · ${poolLabel}`
+        : `${participants.length} participantes · ${perPerson} equipos c/u · distribución exacta · ${poolLabel}`
       toast.success(msg)
     } finally {
       setAssigning(false)
@@ -526,6 +547,71 @@ export default function Admin() {
               }`} />
             </button>
           </div>
+
+          {/* ── Pool de equipos ── */}
+          {(() => {
+            const disabledTeams = active?.disabledTeams ?? []
+            return (
+              <div className="card p-4 border-zinc-700/50">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-white">Equipos excluidos del pool</p>
+                    <p className="text-xs text-zinc-500 mt-0.5">
+                      {disabledTeams.length > 0
+                        ? `${disabledTeams.length} equipo${disabledTeams.length !== 1 ? 's' : ''} excluido${disabledTeams.length !== 1 ? 's' : ''} · ${48 - disabledTeams.length} disponibles`
+                        : 'Todos los equipos disponibles'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowPoolManager(v => !v)}
+                    className="btn-outline text-xs"
+                  >
+                    {showPoolManager ? 'Cerrar' : 'Gestionar'}
+                  </button>
+                </div>
+
+                {showPoolManager && (
+                  <div className="mt-4 space-y-4">
+                    {CONFEDERATION_ORDER.map(conf => {
+                      const confTeams = TEAMS.filter(t => t.confederation === conf)
+                      return (
+                        <div key={conf}>
+                          <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">{conf}</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {confTeams.map(team => {
+                              const isDisabled = disabledTeams.includes(team.code)
+                              return (
+                                <button
+                                  key={team.code}
+                                  onClick={() => handleToggleTeam(team.code)}
+                                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
+                                    isDisabled
+                                      ? 'bg-zinc-900 border-red-500/30 text-zinc-500 line-through opacity-60'
+                                      : 'bg-zinc-800 border-zinc-600 text-zinc-200 hover:border-yellow-500/50 hover:text-white'
+                                  }`}
+                                >
+                                  <span>{team.flag}</span>
+                                  <span>{team.name}</span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })}
+                    {disabledTeams.length > 0 && (
+                      <button
+                        onClick={handleResetDisabled}
+                        className="text-xs text-zinc-500 hover:text-red-400 transition-colors mt-1"
+                      >
+                        Restablecer todos
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
 
           {/* ── Acciones ── */}
           <div className="grid sm:grid-cols-3 gap-4">

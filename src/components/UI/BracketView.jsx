@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { TEAM_MAP } from '../../data/teams'
+import { getBracketSlot } from '../../utils/bracketResolver'
 import TeamCrest from './TeamCrest'
 
 const CARD_H = 54
@@ -83,7 +84,7 @@ export default function BracketView({ matches, myTeams = [] }) {
       g[m.stage].push(m)
     }
     for (const k of Object.keys(g)) {
-      g[k].sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate))
+      g[k].sort((a, b) => getBracketSlot(a) - getBracketSlot(b))
     }
     return g
   }, [matches])

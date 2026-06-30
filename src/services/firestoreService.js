@@ -54,7 +54,7 @@ export async function joinQuiniela(quinielaId, user) {
   const batch = writeBatch(db)
   batch.set(
     doc(db, 'quinielas', quinielaId, 'participants', user.uid),
-    { uid: user.uid, displayName: user.displayName, email: user.email, teams: [], points: 0, joinedAt: serverTimestamp() }
+    { uid: user.uid, displayName: user.displayName, email: user.email, photoURL: user.photoURL ?? null, teams: [], points: 0, joinedAt: serverTimestamp() }
   )
   batch.set(doc(db, 'users', user.uid), { activeQuinielaId: quinielaId }, { merge: true })
   await batch.commit()
@@ -150,6 +150,11 @@ export async function getUserTeams(uid) {
     if (snap.exists()) teams.push(...(snap.data().teams ?? []))
   }
   return [...new Set(teams)]
+}
+
+export async function syncParticipantPhoto(quinielaId, uid, photoURL) {
+  if (!photoURL) return
+  await updateDoc(doc(db, 'quinielas', quinielaId, 'participants', uid), { photoURL })
 }
 
 export async function saveUserProfile(uid, profile) {

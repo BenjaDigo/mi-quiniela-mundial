@@ -8,7 +8,6 @@ import Navbar from './components/Layout/Navbar'
 import Login from './pages/Login'
 import Dashboard    from './pages/Dashboard'
 import MyTeams      from './pages/MyTeams'
-import Leaderboard  from './pages/Leaderboard'
 import Matches      from './pages/Matches'
 import Admin        from './pages/Admin'
 import JoinQuiniela from './pages/JoinQuiniela'
@@ -56,10 +55,10 @@ export default function App() {
           ? (
             <QuinielaProvider>
               <Routes location={location} key={location.pathname}>
-                <Route path="/dashboard"   element={<AuthedLayout><Dashboard /></AuthedLayout>} />
-                <Route path="/my-teams"    element={<AuthedLayout><MyTeams /></AuthedLayout>} />
-                <Route path="/leaderboard" element={<AuthedLayout><Leaderboard /></AuthedLayout>} />
-                <Route path="/matches"     element={<AuthedLayout><Matches /></AuthedLayout>} />
+                <Route path="/dashboard" element={<AuthedLayout><Dashboard /></AuthedLayout>} />
+                <Route path="/my-teams"  element={<AuthedLayout><MyTeams /></AuthedLayout>} />
+                <Route path="/matches"   element={<AuthedLayout><Matches /></AuthedLayout>} />
+                <Route path="/leaderboard" element={<Navigate to="/matches" replace />} />
                 <Route path="/admin"       element={<AuthedLayout><Admin /></AuthedLayout>} />
                 <Route path="/join"        element={<AuthedLayout><JoinQuiniela /></AuthedLayout>} />
                 <Route path="*"            element={<Navigate to="/dashboard" replace />} />

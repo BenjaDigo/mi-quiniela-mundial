@@ -5,11 +5,10 @@ import { useAuth } from '../../context/AuthContext'
 import toast from 'react-hot-toast'
 
 const NAV = [
-  { to: '/dashboard',  label: 'Inicio',        icon: LayoutDashboard },
-  { to: '/my-teams',   label: 'Mis Equipos',   icon: Trophy },
-  { to: '/leaderboard',label: 'Clasificación', icon: Users },
-  { to: '/matches',    label: 'Partidos',      icon: Calendar },
-  { to: '/admin',      label: 'Admin',         icon: Shield, admin: true },
+  { to: '/dashboard', label: 'Inicio',      icon: LayoutDashboard },
+  { to: '/my-teams',  label: 'Mis Equipos', icon: Trophy },
+  { to: '/matches',   label: 'Partidos',    icon: Calendar },
+  { to: '/admin',     label: 'Admin',       icon: Shield, admin: true },
 ]
 
 export default function Navbar({ isAdmin }) {

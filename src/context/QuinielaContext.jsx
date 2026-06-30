@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef, useMemo } from 'react'
-import { listenMatches, saveMatches, getActiveQuinielaId, listenActiveQuinielaId, listenQuiniela, listenParticipants } from '../services/firestoreService'
+import { listenMatches, saveMatches, getActiveQuinielaId, listenActiveQuinielaId, listenQuiniela, listenParticipants, syncParticipantPhoto } from '../services/firestoreService'
 import { fetchMatches } from '../services/footballApi'
 import { useAuth } from './AuthContext'
 
@@ -42,6 +42,8 @@ export function QuinielaProvider({ children }) {
         setQuinielaInfo(q)
       })
       subs.parts = listenParticipants(id, setParticipants)
+      // Sincroniza la foto de perfil de Google silenciosamente
+      if (user?.photoURL) syncParticipantPhoto(id, user.uid, user.photoURL).catch(() => {})
     }
 
     // Carga inicial: admin que aún no tiene users/{uid}.activeQuinielaId

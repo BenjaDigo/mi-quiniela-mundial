@@ -38,6 +38,7 @@ export function AuthProvider({ children }) {
     await saveUserProfile(cred.user.uid, {
       displayName: cred.user.displayName,
       email: cred.user.email,
+      photoURL: cred.user.photoURL ?? null,
     })
     return cred.user
   }
